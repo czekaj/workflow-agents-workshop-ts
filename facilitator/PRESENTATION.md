@@ -18,22 +18,42 @@ Hello. I am < Intro yourself >. Today, we're going to build and deploy agents on
 
 ---
 
-## Slide 2 — The hook
+## Slide 2 — Why this matters now
 
-**One agent pipeline. Three execution substrates.**
+**Agent orchestration is a workflow problem first, an AI problem second.**
+
+- 2026: agents are going to production
+- The hard parts: orchestration, observability, durability, retries, isolation, scale
+- The question: how much of this infrastructure do you own?
+
+**Notes**
+
+Agents are shipping to production this year. The hard part is everything around the model call — making a multi-step chain survive a crash, retrying one failed tool call without replaying the whole run, scaling workloads independently. So the question becomes: how much of that infrastructure do you build and maintain yourself? That question is the spine of today: we'll answer it three times, shifting more of the substrate to the platform each pass.
+
+---
+
+## Slide 3 — One pipeline, three substrates
+
+**The thing we build once, and run three ways**
 
 - A PR goes in. A verdict comes out.
 - `prepareDiff → filterDiff → [ security ‖ performance ‖ ux? ] → judge`
 - Four specialist agents with tools and an LLM loop
-- What will change is *where* and *how* it runs
+- What changes is *where* and *how* it runs — never the agent
+
+| Pattern | Substrate | Orchestration | Failure mode | Scale |
+| --- | --- | --- | --- | --- |
+| Pattern 1 | Request-bound web service | None | Timeouts, lost work on deploy | No |
+| Pattern 2 | Web service + queue + worker | Queue, acknowledgements, consumer group, retries | Coordination bugs | Yes |
+| Pattern 3 | Render Workflows | Managed | App logic | Yes |
 
 **Notes**
 
-We have one code-review pipeline: fetch a PR, filter out noise, fan out specialist reviewers in parallel, then a judge consolidates findings into an approve-or-request-changes verdict. The agents are defined once in a shared package. What changes is the the infrastructure that runs them. 
+We have one code-review pipeline: fetch a PR, filter out noise, fan out specialist reviewers in parallel, then a judge consolidates findings into an approve-or-request-changes verdict. The agents are defined once in a shared package. What changes is the infrastructure that runs them. Hold this table in your head for the entire workshop — the agents are the constant, the substrate is the variable. Pattern 1 has a web service and database, but no separate orchestration layer. Pattern 2 is powerful, but you own the queue and coordination code. Pattern 3 gives you the same power with managed orchestration. We're going to build each one and feel the difference.
 
 ---
 
-## Slide 3 — Setup and first run
+## Slide 4 — Setup and first run
 
 **Get everyone to a working agent before the first lab**
 
@@ -47,46 +67,6 @@ We have one code-review pipeline: fetch a PR, filter out noise, fan out speciali
 - Open the Web Service URL and submit the demo PR
 - Click a run to inspect findings and spans
 
-**Notes**
-
-This should be a guided code-along, not a deep exercise. The tutorial companion has the exact steps, so the slide should stay at checkpoint level. Start from GitHub so every attendee gets their own fork and generated namespace before they clone locally. Then walk through install, `npm run setup`, and the Pattern 1 deploy. Pattern 1 is worth doing with attendees because it gets them acclimated to the repo, the Render Dashboard, the deployed app, and the review viewer. The goal is a first success moment: everyone has a live agent, everyone has submitted a PR, and everyone has seen a trace. After that, Pattern 1 becomes the baseline we can critique. Pattern 2 is where they feel the coordination pain. Pattern 3 is where they author the platform-native version.
-
----
-
-## Slide 4 — Why this matters now
-
-**Agent orchestration is a workflow problem first, an AI problem second.**
-
-- 2026: agents are going to production
-- The hard parts: orchestration, observability, durability, retries, isolation, scale
-- The question: how much of this infrastructure do you own?
-
-**Notes**
-
-Agents are shipping to production this year. The hard part is everything around the model call - making a multi-step chain survive a crash, retrying one failed tool call without replaying the whole run, scaling workloads independently. So the question becomes: how much of that infrastructure do you build and maintain yourself? 
-
----
-
-## Slide 5 — The spine
-
-**The mental model to hold for the whole workshop**
-
-Same agent. Same review pipeline. Three execution substrates.
-
-| Pattern | Substrate | Orchestration | Failure mode | Scale |
-| --- | --- | --- | --- | --- |
-| Pattern 1 | Request-bound web service | None | Timeouts, lost work on deploy | No |
-| Pattern 2 | Web service + queue + worker | Queue, acknowledgements, consumer group, retries | Coordination bugs | Yes |
-| Pattern 3 | Render Workflows | Managed | App logic | Yes |
-
-**Notes**
-
-I want you to hold this picture in your head for the entire workshop. The agents are the constant. The bottom three rows are the variables — the substrate. Pattern 1 has a web service and database, but no separate orchestration layer. Pattern 2 is powerful, but you own the queue and coordination code. Pattern 3 gives you the same power with managed orchestration. We're going to build each one and feel the difference.
-
----
-
-## Slide 6 — The repo
-
 **What you're working with**
 
 - `shared/agent/` — the engine: agents, LLM loop, tools, model client
@@ -98,11 +78,13 @@ I want you to hold this picture in your head for the entire workshop. The agents
 
 **Notes**
 
+This should be a guided code-along, not a deep exercise. The tutorial companion has the exact steps, so the slide should stay at checkpoint level. Start from GitHub so every attendee gets their own fork and generated namespace before they clone locally. Then walk through install, `npm run setup`, and the Pattern 1 deploy. Pattern 1 is worth doing with attendees because it gets them acclimated to the repo, the Render Dashboard, the deployed app, and the review viewer. The goal is a first success moment: everyone has a live agent, everyone has submitted a PR, and everyone has seen a trace. After that, Pattern 1 becomes the baseline we can critique. Pattern 2 is where they feel the coordination pain. Pattern 3 is where they author the platform-native version.
+
 This is an npm workspaces monorepo. Every pattern imports the same agents, the same tools, the same model client.
 
 ---
 
-## Slide 7 — Pattern 1: The naive agent
+## Slide 5 — Pattern 1: The naive agent
 
 **The simplest thing that works**
 
@@ -125,7 +107,7 @@ This is the starting point every agent tutorial gives you. The handler awaits th
 
 ---
 
-## Slide 8 — Break it
+## Slide 6 — Break it
 
 **Three ways Pattern 1 fails**
 
@@ -139,7 +121,7 @@ DEMO: Talk through submitting a large PR — the request hangs. Or talk through 
 
 ---
 
-## Slide 9 — Pattern 2: Queue + Worker
+## Slide 7 — Pattern 2: Queue + Worker
 
 ```mermaid
 flowchart LR
@@ -161,7 +143,7 @@ DEMO: Submit a PR and get back 202 immediately. Tail the worker logs — the rev
 
 ---
 
-## Slide 10 — The price of durability
+## Slide 8 — The price of durability
 
 **Everything in `kv.ts` is coordination code you now own**
 
@@ -178,7 +160,7 @@ The stream. The consumer group. Blocking reads. Message acknowledgements. Retrie
 
 ---
 
-## Slide 11 — Lab 1: Hand-write message acknowledgements
+## Slide 9 — Lab 1: Hand-write message acknowledgements
 
 **Implement `processEntry` in `kv.ts`**
 
@@ -202,7 +184,7 @@ This is Session 1's hands-on. Open `processEntry` in `packages/worker-agents/src
 
 ---
 
-## Slide 12 — Pattern 3: Render Workflows
+## Slide 10 — Pattern 3: Render Workflows
 
 **Same fan-out. Zero coordination code.**
 
@@ -230,7 +212,7 @@ This is the payoff. Same pipeline, same agents, same tools. But now every review
 
 ---
 
-## Slide 13 — The bridge: `agentTask.ts`
+## Slide 11 — The bridge: `agentTask.ts`
 
 ```ts
 task(agent.name, async (input, runId?) => {
@@ -243,12 +225,7 @@ task(agent.name, async (input, runId?) => {
 - Retries are per-task, not per-pipeline
 - Spans are recorded automatically — every LLM turn, every tool call
 
-**Notes**
-
-This is `agentTask.ts`. It's the only Pattern-3-specific code. `agent.run()` is the same call naive-agent and worker-agents make. Wrapping it in `task()` is what buys isolation, retries, and traces. That's the entire abstraction.
-
-
-## Slide 14 — The `task()` API
+**The `task()` API**
 
 **Everything you need to know**
 
@@ -273,10 +250,13 @@ export default task(
 
 **Notes**
 
+This is `agentTask.ts`. It's the only Pattern-3-specific code. `agent.run()` is the same call naive-agent and worker-agents make. Wrapping it in `task()` is what buys isolation, retries, and traces. That's the entire abstraction.
+
 This is the entire API surface. A config object and a function. Name, timeout, retry behavior, optional compute size. That's it. The retries you hand-wrote in Lab 1 — the ack inside the try, the catch that swallows errors — are now `maxRetries: 2`. Same guarantee. Config object.
 
+---
 
-## Slide 15 — Lab 2: Author a task
+## Slide 12 — Lab 2: Author a task
 
 **Your turn — extend `your-review`**
 
@@ -297,7 +277,7 @@ Open `your-review/index.ts`. It fetches a diff and returns an overview. It's you
 
 ---
 
-## Slide 16 — What you just built
+## Slide 13 — What you just built
 
 **A durable, traced, multi-agent workflow**
 
@@ -312,9 +292,7 @@ The only infrastructure you wrote was a function and a config object. Everything
 
 ---
 
----
-
-## Slide 17 — Where to go from here
+## Slide 14 — Where to go from here
 
 **The production frontier**
 
@@ -326,16 +304,14 @@ The only infrastructure you wrote was a function and a config object. Everything
 
 ---
 
-## Slide 18 — The takeaway
+## Slide 15 — The takeaway
 
 - Pattern 1: simple, but fragile
 - Pattern 2: powerful, but you own the hard parts
 - Pattern 3: same power, the platform owns the hard parts
 - Agents are the logic you write. Workflows are the infrastructure you don't.
 
----
-
-## Slide 19 — Resources
+**Resources**
 
 - **This repo:** all three patterns, the mock model, the full test suite
 - **Docs:** `docs/00` through `docs/05` — the guided walkthrough
